@@ -1,0 +1,43 @@
+{
+  "name": "@er-brocode/crdt-canvas-engine",
+  "version": "1.0.0",
+  "description": "Production-grade Real-Time Collaborative CRDT Document & Code Canvas Engine in TypeScript",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --runInBand --detectOpenHandles --forceExit",
+    "test:coverage": "jest --coverage --runInBand --detectOpenHandles --forceExit",
+    "lint": "eslint src/ tests/ --ext .ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "crdt",
+    "logoot",
+    "yjs",
+    "canvas",
+    "infinite-canvas",
+    "collaborative-editing",
+    "vector-clock",
+    "realtime",
+    "websocket",
+    "typescript"
+  ],
+  "author": "koushik4475 <koushik4475@gmail.com>",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.17.10",
+    "@types/ws": "^8.5.13",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
