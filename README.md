@@ -1,6 +1,9 @@
 <div align="center">
 
-# 🎨 CRDT Canvas Engine
+# CRDT Canvas Engine | Real-Time Collaborative Canvas and Document Synchronization
+
+CRDT Canvas Engine is a TypeScript project for building collaborative documents and interactive canvases that synchronize edits across multiple peers. Its documented design uses conflict-free replicated data types (CRDTs), operation identifiers, vector-clock concepts, and WebSocket-based peer synchronization. It is useful for developers researching collaborative editors, offline-friendly shared state, and eventual consistency.
+
 ### *Next-Generation Real-Time Collaborative Document & Code Canvas Engine*
 
 [![CI Pipeline](https://github.com/ER-brocode/crdt-canvas-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/ER-brocode/crdt-canvas-engine/actions/workflows/ci.yml)
