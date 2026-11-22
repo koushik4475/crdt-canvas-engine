@@ -94,11 +94,9 @@ export class VectorClock {
   }
 
   public toJSON(): Record<string, number> {
-    const obj: Record<string, number> = {};
-    for (const [k, v] of this.clock.entries()) {
-      obj[k] = v;
-    }
-    return obj;
+    // Object.fromEntries creates own data properties, including for keys such
+    // as "__proto__", without invoking Object.prototype setters.
+    return Object.fromEntries(this.clock.entries());
   }
 
   public clone(): VectorClock {
