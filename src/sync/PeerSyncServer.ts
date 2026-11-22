@@ -28,14 +28,12 @@ export class PeerSyncServer {
   constructor(private port: number = 8080) {}
 
   public start(): Promise<void> {
-    return new Promise((resolve) => {
-      this.wss = new WebSocketServer({ port: this.port }, () => {
-        resolve();
-      });
-
+    return new Promise((resolve, reject) => {
+      this.wss = new WebSocketServer({ port: this.port }, () => resolve());
       this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
         this.handleConnection(ws, req);
       });
+      this.wss.on('error', reject);
     });
   }
 
@@ -62,10 +60,7 @@ export class PeerSyncServer {
       }
     });
 
-    ws.on('close', () => {
-      this.removeClient(ws);
-    });
-
+    ws.on('close', () => this.removeClient(ws));
     ws.on('error', (err) => {
       console.error('WebSocket client error:', err);
       this.removeClient(ws);
@@ -73,62 +68,66 @@ export class PeerSyncServer {
   }
 
   private processMessage(ws: WebSocket, msg: WireMessage): void {
-    switch (msg.type) {
-      case 'join': {
-        const client: PeerClient = {
-          id: msg.siteId,
+    if (msg.type === 'join') {
+      if (
+        typeof msg.roomId !== 'string' || msg.roomId.trim().length === 0 ||
+        typeof msg.siteId !== 'string' || msg.siteId.trim().length === 0
+      ) {
+        return;
+      }
+
+      // A socket may belong to only one room. Remove any previous membership
+      // before accepting a new join so it cannot retain access to old rooms.
+      this.removeClient(ws);
+      const client: PeerClient = {
+        id: msg.siteId,
+        roomId: msg.roomId,
+        ws,
+        lastSeen: Date.now(),
+        userName: msg.userName
+      };
+      this.clients.set(ws, client);
+
+      if (!this.rooms.has(msg.roomId)) this.rooms.set(msg.roomId, new Set());
+      this.rooms.get(msg.roomId)!.add(ws);
+
+      this.broadcastToRoom(msg.roomId, ws, msg);
+      const existingState = this.roomStates.get(msg.roomId);
+      if (existingState !== undefined) {
+        ws.send(JSON.stringify({
+          type: 'sync-state',
           roomId: msg.roomId,
-          ws,
-          lastSeen: Date.now(),
-          userName: msg.userName
-        };
-        this.clients.set(ws, client);
-
-        if (!this.rooms.has(msg.roomId)) {
-          this.rooms.set(msg.roomId, new Set());
-        }
-        this.rooms.get(msg.roomId)!.add(ws);
-
-        // Notify other room members
-        this.broadcastToRoom(msg.roomId, ws, msg);
-
-        // If server holds snapshot, provide it to client
-        const existingState = this.roomStates.get(msg.roomId);
-        if (existingState) {
-          ws.send(JSON.stringify({
-            type: 'sync-state',
-            roomId: msg.roomId,
-            siteId: 'SERVER',
-            state: existingState
-          }));
-        }
-        break;
+          siteId: 'SERVER',
+          state: existingState
+        }));
       }
+      return;
+    }
 
-      case 'crdt-payload': {
-        this.broadcastToRoom(msg.roomId, ws, msg);
-        break;
-      }
+    // Never trust room/site identifiers supplied by the wire message. They
+    // must match the membership established for this exact socket at join.
+    const client = this.clients.get(ws);
+    if (!client || msg.roomId !== client.roomId || msg.siteId !== client.id) {
+      return;
+    }
 
-      case 'awareness': {
-        const client = this.clients.get(ws);
-        if (client) {
+    switch (msg.type) {
+      case 'crdt-payload':
+      case 'awareness':
+        if (msg.type === 'awareness') {
           client.cursor = msg.cursor;
           client.lastSeen = Date.now();
         }
-        this.broadcastToRoom(msg.roomId, ws, msg);
+        this.broadcastToRoom(client.roomId, ws, msg);
         break;
-      }
 
-      case 'sync-state': {
-        this.roomStates.set(msg.roomId, msg.state);
-        this.broadcastToRoom(msg.roomId, ws, msg);
+      case 'sync-state':
+        this.roomStates.set(client.roomId, msg.state);
+        this.broadcastToRoom(client.roomId, ws, msg);
         break;
-      }
 
       case 'request-state': {
-        // Find another peer in room to ask or return cached
-        const roomPeers = this.rooms.get(msg.roomId);
+        const roomPeers = this.rooms.get(client.roomId);
         if (roomPeers && roomPeers.size > 1) {
           for (const peer of roomPeers) {
             if (peer !== ws && peer.readyState === WebSocket.OPEN) {
@@ -140,10 +139,9 @@ export class PeerSyncServer {
         break;
       }
 
-      case 'leave': {
+      case 'leave':
         this.removeClient(ws);
         break;
-      }
     }
   }
 
@@ -152,30 +150,27 @@ export class PeerSyncServer {
     if (!peers) return;
     const payload = JSON.stringify(msg);
     for (const peer of peers) {
-      if (peer !== sender && peer.readyState === WebSocket.OPEN) {
-        peer.send(payload);
-      }
+      if (peer !== sender && peer.readyState === WebSocket.OPEN) peer.send(payload);
     }
   }
 
   private removeClient(ws: WebSocket): void {
     const client = this.clients.get(ws);
-    if (client) {
-      const roomPeers = this.rooms.get(client.roomId);
-      if (roomPeers) {
-        roomPeers.delete(ws);
-        if (roomPeers.size === 0) {
-          this.rooms.delete(client.roomId);
-        } else {
-          this.broadcastToRoom(client.roomId, ws, {
-            type: 'leave',
-            roomId: client.roomId,
-            siteId: client.id
-          });
-        }
+    if (!client) return;
+    const roomPeers = this.rooms.get(client.roomId);
+    if (roomPeers) {
+      roomPeers.delete(ws);
+      if (roomPeers.size === 0) {
+        this.rooms.delete(client.roomId);
+      } else {
+        this.broadcastToRoom(client.roomId, ws, {
+          type: 'leave',
+          roomId: client.roomId,
+          siteId: client.id
+        });
       }
-      this.clients.delete(ws);
     }
+    this.clients.delete(ws);
   }
 
   public getConnectedClientsCount(): number {
