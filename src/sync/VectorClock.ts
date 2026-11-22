@@ -9,28 +9,37 @@ export class VectorClock {
     if (initial) {
       if (initial instanceof Map) {
         for (const [k, v] of initial.entries()) {
-          this.clock.set(k, v);
+          this.set(k, v);
         }
       } else {
         for (const [k, v] of Object.entries(initial)) {
-          this.clock.set(k, v);
+          this.set(k, v);
         }
       }
     }
   }
 
   public get(siteId: string): number {
-    return this.clock.get(siteId) || 0;
+    return this.clock.get(siteId) ?? 0;
   }
 
   public increment(siteId: string): number {
     const current = this.get(siteId);
+    if (current === Number.MAX_SAFE_INTEGER) {
+      throw new RangeError('Vector clock counter exceeds the safe integer range');
+    }
     const next = current + 1;
-    this.clock.set(siteId, next);
+    this.set(siteId, next);
     return next;
   }
 
   public set(siteId: string, val: number): void {
+    if (typeof siteId !== 'string' || siteId.trim().length === 0) {
+      throw new TypeError('Vector clock siteId must be a non-empty string');
+    }
+    if (!Number.isSafeInteger(val) || val < 0) {
+      throw new RangeError('Vector clock counters must be non-negative safe integers');
+    }
     this.clock.set(siteId, val);
   }
 
@@ -41,7 +50,7 @@ export class VectorClock {
     for (const [siteId, value] of other.clock.entries()) {
       const cur = this.get(siteId);
       if (value > cur) {
-        this.clock.set(siteId, value);
+        this.set(siteId, value);
       }
     }
   }
