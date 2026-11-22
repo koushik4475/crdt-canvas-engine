@@ -101,7 +101,7 @@ export class PeerSyncServer {
           state: existingState
         }));
       }
-      break;
+      return;
     }
 
     // Never trust room/site identifiers supplied by the wire message. They
