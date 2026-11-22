@@ -31,3 +31,20 @@ describe('VectorClock counter validation', () => {
     expect(clock.increment('peer')).toBe(1);
   });
 });
+
+
+describe('VectorClock JSON serialization', () => {
+  test('preserves prototype-named site identifiers as own properties', () => {
+    const clock = new VectorClock({ ['__proto__']: 7, constructor: 3 });
+
+    const json = clock.toJSON();
+    expect(Object.prototype.hasOwnProperty.call(json, '__proto__')).toBe(true);
+    expect(json['__proto__']).toBe(7);
+    expect(json.constructor).toBe(3);
+    expect(Object.getPrototypeOf(json)).toBe(Object.prototype);
+
+    const restored = VectorClock.fromJSON(JSON.parse(JSON.stringify(clock)));
+    expect(restored.get('__proto__')).toBe(7);
+    expect(restored.get('constructor')).toBe(3);
+  });
+});
